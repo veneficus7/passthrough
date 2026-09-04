@@ -13,7 +13,7 @@ Everything here assumes the repo root as the working directory.
 .venv/Scripts/python -m pytest
 ```
 
-Expect **210 passed** (187 unit, 52 integration). The integration tests launch
+Expect **244 passed, 1 skipped** (183 unit, 62 integration). The integration tests launch
 a real Blender; if Blender is not found they are skipped rather than failed, and
 you would see the integration ones skipped instead — which means the integration
 half did **not** run.
@@ -255,3 +255,32 @@ Then check the comp, top to bottom:
 11. Confirm the shot still lines up exactly as it did in §5's alignment check.
     If everything is offset by half the comp size, `PT World` is not the
     identity — its Position and Anchor Point must both be `0,0,0`.
+
+---
+
+## 8. M5 — the scene doctor
+
+1. Open a heavy scene, or make one: a subdivided grid and a few 4K textures at
+   1080×1920 will do.
+2. Expand **Scene Doctor** and press **Check Scene**. The panel shows the
+   projected peak against the budget; the full breakdown goes to the console
+   (*Window ▸ Toggle System Console*).
+3. If it is over budget, a **Fit to Budget** button appears. Press it. The
+   header reports what changed — capped textures, decimated objects, clamped
+   resolution, in that order, stopping as soon as the projection fits.
+4. Press **Check Scene** again. It should now report that it fits.
+
+### Confirming the estimate is real
+
+5. Render the shot and watch `blender.exe` in Task Manager. Peak memory should
+   land within about a quarter of what the doctor projected.
+6. The budget lives in *Edit ▸ Preferences ▸ Add-ons ▸ Passthrough ▸ Memory
+   Budget*. Default is 6 GB.
+
+### Undoing the fixes
+
+Decimation adds a modifier named **PT Decimate** — delete it to restore the
+mesh. Resolution is just the percentage in Output Properties. Textures are
+scaled *and packed into the file*; to restore them, use *Image ▸ Unpack* and
+then reload the image. That last one is the only change that is not a one-click
+undo, which is why it is listed here.

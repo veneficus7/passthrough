@@ -7,7 +7,7 @@ and arrive with a later milestone.
 
 import bpy
 
-from . import pass_spec, passes, scene_capture
+from . import pass_spec, passes, prefs, scene_capture, scene_doctor
 
 
 class PassthroughSceneSettings(bpy.types.PropertyGroup):
@@ -23,6 +23,11 @@ class PassthroughSceneSettings(bpy.types.PropertyGroup):
         name="Shot Name",
         description="Subfolder for this shot; each pass gets a folder inside it",
         default="shot",
+    )
+    last_estimate: bpy.props.IntProperty(
+        name="Last Estimate",
+        description="Projected peak memory from the most recent scene check, in bytes",
+        default=0,
     )
 
 
@@ -88,10 +93,43 @@ class PASSTHROUGH_PT_passes(bpy.types.Panel):
         col.label(text=pass_spec.shot_dir(settings.output_root, shot), icon="FILE_FOLDER")
 
 
+class PASSTHROUGH_PT_doctor(bpy.types.Panel):
+    """Projected memory cost, before committing to a long render."""
+
+    bl_idname = "PASSTHROUGH_PT_doctor"
+    bl_label = "Scene Doctor"
+    bl_parent_id = "PASSTHROUGH_PT_main"
+    bl_space_type = "PROPERTIES"
+    bl_region_type = "WINDOW"
+    bl_context = "render"
+
+    def draw(self, context):
+        layout = self.layout
+        settings = context.scene.passthrough
+        budget = prefs.memory_budget(context)
+
+        col = layout.column(align=True)
+        col.operator(scene_capture.PASSTHROUGH_OT_diagnose.bl_idname, icon="MEMORY")
+
+        if settings.last_estimate:
+            over = settings.last_estimate > budget
+            box = layout.box()
+            box.label(
+                text=f"Projected {scene_doctor.format_bytes(settings.last_estimate)}",
+                icon="ERROR" if over else "CHECKMARK",
+            )
+            box.label(text=f"Budget {scene_doctor.format_bytes(budget)}")
+            if over:
+                box.operator(scene_capture.PASSTHROUGH_OT_auto_fix.bl_idname, icon="MODIFIER")
+        else:
+            layout.label(text="Not checked yet")
+
+
 _CLASSES = (
     PassthroughSceneSettings,
     PASSTHROUGH_PT_main,
     PASSTHROUGH_PT_passes,
+    PASSTHROUGH_PT_doctor,
 )
 
 

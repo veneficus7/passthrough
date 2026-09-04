@@ -58,10 +58,21 @@ def test_the_panel_lands_in_render_properties(report):
 
 def test_every_milestone_operator_is_registered(report):
     assert set(report["operators"]) == {
-        "PASSTHROUGH_OT_setup_passes",
-        "PASSTHROUGH_OT_export_jsx",
-        "PASSTHROUGH_OT_render_headless",
+        "PASSTHROUGH_OT_setup_passes",  # M1
+        "PASSTHROUGH_OT_export_jsx",  # M2
+        "PASSTHROUGH_OT_render_headless",  # M3
+        "PASSTHROUGH_OT_diagnose",  # M5
+        "PASSTHROUGH_OT_auto_fix",  # M5
     }
+
+
+def test_every_panel_is_registered(report):
+    assert set(report["panels"]) == {
+        "PASSTHROUGH_PT_main",
+        "PASSTHROUGH_PT_passes",
+        "PASSTHROUGH_PT_doctor",
+    }
+    assert set(report["panel_contexts"].values()) == {"render"}
 
 
 def test_the_render_operator_exposes_close_ui(report):

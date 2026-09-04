@@ -9,11 +9,12 @@ Full design and rationale: [SPEC.md](SPEC.md).
 
 ## Status
 
-**M4 — Full After Effects import.** Configure the EEVEE passes, render the
-frame range in a *separate* background Blender — optionally quitting the UI as
-it launches, which is the whole point of the project — then run one script in
-After Effects to get the whole shot back. Passes land in the layout SPEC.md
-§7.3 specifies:
+**M5 — Scene doctor.** Check what a render will cost before committing to it,
+degrade the scene automatically if it will not fit, configure the EEVEE passes,
+render in a *separate* background Blender — optionally quitting the UI as it
+launches, which is the whole point of the project — then run one script in After
+Effects to get the whole shot back. Passes land in the layout SPEC.md §7.3
+specifies:
 
 ```
 <output_root>/<shot_name>/
@@ -114,6 +115,41 @@ Two further things this implementation adds:
   Euler arithmetic on plain tuples, because §6 requires it to be testable
   without Blender. The port is checked element-wise against
   `mathutils.Matrix.to_euler('ZYX')` in the integration tests.
+
+## Scene doctor notes
+
+The memory model's coefficients are measured, not guessed. Seventeen scenes were
+built as `.blend` files, rendered headlessly through `render_job.py`, and their
+peak working set sampled from the parent process:
+
+| term | value |
+|---|---|
+| Blender headless, empty scene | 480 MB |
+| render buffers | 175 bytes per output pixel |
+| evaluated geometry | 135 bytes per triangle |
+| textures | 1.45 × the raw image bytes |
+
+A least-squares fit lands within **5.7%** on every calibration scene. The
+shipped constants are that fit rounded *upward*: worst case 16.1%, but it
+under-estimates only once in seventeen. Under-estimating is the dangerous
+direction — it tells you a scene fits when it does not.
+
+Three things that surfaced while building this:
+
+- **Construction has to be measured separately from rendering.** Building a
+  2M-triangle grid with a Blender operator spikes memory in ways that loading
+  the finished `.blend` never does. A first calibration that built and rendered
+  in one process put the geometry term three times too high and missed the ±25%
+  target by 37%.
+- **EEVEE has no Simplify texture limit.** §M5 says to "cap texture size via
+  Simplify", but `texture_limit_render` is a Cycles property and
+  `scene.render` exposes no texture options at all. The auto-fix scales the
+  image datablocks instead.
+- **`image.scale()` does not survive a `.blend` round trip.** The image's source
+  is still `FILE`, so a fresh Blender re-reads the full-size file and the saving
+  silently evaporates — and only in the headless path, which renders from a
+  saved snapshot. The scaled buffer has to be packed into the file. Reversible
+  with `unpack()` then `reload()`.
 
 ## After Effects import notes
 

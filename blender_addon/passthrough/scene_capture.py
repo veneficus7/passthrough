@@ -11,11 +11,12 @@ unit tested. M4 (nulls and lights) and M5 (the scene doctor's inputs) capture
 from here too.
 """
 
+import contextlib
 import os
 
 import bpy
 
-from . import camera_convert, jsx_writer, pass_spec, prefs, queue
+from . import camera_convert, jsx_writer, pass_spec, prefs, queue, scene_doctor
 
 
 def render_dimensions(scene):
@@ -371,7 +372,207 @@ class PASSTHROUGH_OT_render_headless(bpy.types.Operator):
         context.workspace.status_text_set(None)
 
 
-_CLASSES = (PASSTHROUGH_OT_export_jsx, PASSTHROUGH_OT_render_headless)
+# --- scene doctor (M5) -------------------------------------------------------
+
+#: Images that are not real textures and must not be counted.
+_NON_TEXTURE_IMAGES = {"Render Result", "Viewer Node"}
+
+#: Name given to the modifier auto-fix adds, so it can be found and updated
+#: rather than stacked up on every run.
+DECIMATE_MODIFIER = "PT Decimate"
+
+
+def evaluated_triangles(obj, depsgraph):
+    """Triangle count after modifiers.
+
+    The evaluated mesh is what actually costs memory: a subdivision surface can
+    multiply a cage by a hundred, and estimating from the original mesh would
+    miss all of it.
+    """
+    try:
+        mesh = obj.evaluated_get(depsgraph).data
+    except (RuntimeError, AttributeError):
+        return 0
+    if mesh is None or not hasattr(mesh, "polygons"):
+        return 0
+    with contextlib.suppress(RuntimeError, AttributeError):
+        mesh.calc_loop_triangles()
+    count = len(getattr(mesh, "loop_triangles", ()))
+    if count:
+        return count
+    return sum(max(0, len(polygon.vertices) - 2) for polygon in mesh.polygons)
+
+
+def capture_scene_stats(context):
+    """Describe the scene for scene_doctor, as plain data."""
+    scene = context.scene
+    depsgraph = context.evaluated_depsgraph_get()
+
+    objects = []
+    for obj in scene.objects:
+        if obj.type != "MESH" or not obj.visible_get():
+            continue
+        triangles = evaluated_triangles(obj, depsgraph)
+        if triangles:
+            objects.append({"name": obj.name, "triangles": triangles})
+
+    textures = []
+    for image in bpy.data.images:
+        if image.name in _NON_TEXTURE_IMAGES or image.type != "IMAGE":
+            continue
+        width, height = image.size[0], image.size[1]
+        channels = image.channels or 4
+        if width <= 0 or height <= 0:
+            continue
+        textures.append(
+            {
+                "name": image.name,
+                "width": width,
+                "height": height,
+                "channels": channels,
+                # image.depth is bits for the whole pixel, so divide it out.
+                "depth": max(8, (image.depth or 32) // channels),
+            }
+        )
+
+    return {
+        "resolution_x": scene.render.resolution_x,
+        "resolution_y": scene.render.resolution_y,
+        "resolution_percentage": scene.render.resolution_percentage,
+        "objects": objects,
+        "textures": textures,
+    }
+
+
+def diagnose_scene(context):
+    return scene_doctor.diagnose(capture_scene_stats(context), prefs.memory_budget(context))
+
+
+def apply_fix(context, fix):
+    """Apply one scene_doctor fix. Returns a human-readable note."""
+    scene = context.scene
+
+    if fix.kind == "resolution":
+        scene.render.resolution_percentage = int(fix.detail["percentage"])
+        return f"resolution set to {fix.detail['percentage']}%"
+
+    if fix.kind == "decimate":
+        ratio = float(fix.detail["ratio"])
+        touched = 0
+        for name in fix.detail["objects"]:
+            obj = scene.objects.get(name)
+            if obj is None:
+                continue
+            modifier = obj.modifiers.get(DECIMATE_MODIFIER)
+            if modifier is None:
+                modifier = obj.modifiers.new(DECIMATE_MODIFIER, "DECIMATE")
+            modifier.decimate_type = "COLLAPSE"
+            modifier.ratio = ratio
+            touched += 1
+        return f"decimated {touched} object(s) to {ratio:.0%}"
+
+    if fix.kind == "texture_scale":
+        limit = int(fix.detail["limit"])
+        touched = 0
+        for name in fix.detail["images"]:
+            image = bpy.data.images.get(name)
+            if image is None:
+                continue
+            width, height = image.size[0], image.size[1]
+            if max(width, height) <= limit:
+                continue
+            if width >= height:
+                new_width, new_height = limit, max(1, round(height * limit / width))
+            else:
+                new_height, new_width = limit, max(1, round(width * limit / height))
+            image.scale(new_width, new_height)
+            # Scaling alone does not survive a .blend round trip: the image's
+            # source is still FILE, so a fresh Blender re-reads the full-size
+            # file and the saving evaporates. Since the headless render works
+            # from a saved snapshot, that would leave the doctor predicting a
+            # cost the real render sails past. Packing embeds the scaled buffer,
+            # which does persist. Reversible with unpack() then reload().
+            with contextlib.suppress(RuntimeError):
+                image.pack()
+            touched += 1
+        return f"scaled {touched} texture(s) to {limit}px"
+
+    return f"unknown fix: {fix.kind}"
+
+
+class PASSTHROUGH_OT_diagnose(bpy.types.Operator):
+    """Estimate what this scene will cost to render, before committing to it."""
+
+    bl_idname = "passthrough.diagnose"
+    bl_label = "Check Scene"
+    bl_description = (
+        "Estimate peak memory from texture sizes, polygon counts and render "
+        "resolution, and report whether the render fits the budget"
+    )
+    bl_options = {"REGISTER"}
+
+    def execute(self, context):
+        report = diagnose_scene(context)
+        for line in scene_doctor.summarise(report):
+            print("Passthrough: " + line)
+        context.scene.passthrough.last_estimate = report.estimate.total
+        if report.fits:
+            self.report(
+                {"INFO"},
+                f"Projected {scene_doctor.format_bytes(report.estimate.total)}; fits the budget",
+            )
+        else:
+            self.report(
+                {"WARNING"},
+                f"Projected {scene_doctor.format_bytes(report.estimate.total)}, over the "
+                f"{scene_doctor.format_bytes(report.budget)} budget. "
+                f"{len(report.fixes)} fix(es) available; see the console",
+            )
+        return {"FINISHED"}
+
+
+class PASSTHROUGH_OT_auto_fix(bpy.types.Operator):
+    """Degrade the scene until it fits the memory budget."""
+
+    bl_idname = "passthrough.auto_fix"
+    bl_label = "Fit to Budget"
+    bl_description = (
+        "Cap oversized textures, decimate heavy objects and clamp the render "
+        "resolution until the projected memory fits the budget"
+    )
+    bl_options = {"REGISTER", "UNDO"}
+
+    def execute(self, context):
+        report = diagnose_scene(context)
+        if report.fits:
+            self.report({"INFO"}, "Already within budget; nothing changed")
+            return {"CANCELLED"}
+
+        notes = [apply_fix(context, fix) for fix in report.fixes]
+        after = diagnose_scene(context)
+        context.scene.passthrough.last_estimate = after.estimate.total
+
+        summary = "; ".join(notes) if notes else "no fix available"
+        if after.fits:
+            self.report(
+                {"INFO"},
+                f"{summary}. Now {scene_doctor.format_bytes(after.estimate.total)}",
+            )
+        else:
+            self.report(
+                {"WARNING"},
+                f"{summary}. Still {scene_doctor.format_bytes(after.estimate.total)}, "
+                f"over budget -- reduce the scene by hand",
+            )
+        return {"FINISHED"}
+
+
+_CLASSES = (
+    PASSTHROUGH_OT_export_jsx,
+    PASSTHROUGH_OT_render_headless,
+    PASSTHROUGH_OT_diagnose,
+    PASSTHROUGH_OT_auto_fix,
+)
 
 
 def register():

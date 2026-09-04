@@ -64,9 +64,13 @@ Two things verified against a real Blender install that differ from SPEC.md:
   `blender_manifest.toml` at the archive root, and creates the `passthrough/`
   directory at install time from the manifest `id`. Verified on 5.1.2: installs,
   enables, and registers. Do not hand-repack the zip into a folder.
-- **§5 target version.** `blender_version_min` is `5.2.0` per the spec, so the
-  extension will refuse to install on anything older. The development machine
-  currently has Blender 5.1.2.
+- **§5 target version.** `blender_version_min` is `5.2.0` per the spec. On an
+  older Blender the zip still *installs* — files are copied and the extension
+  shows up in the add-on list — but it will not **enable**. The console reports
+  `This Blender version (5.1.2) doesn't meet the minimum supported version
+  (5.2.0)`, nothing registers, and no panel appears. The failure looks like a
+  broken add-on rather than a version gate, so check the console first. The
+  development machine currently has Blender 5.1.2.
 
 ## Blender 5.x compositor notes
 

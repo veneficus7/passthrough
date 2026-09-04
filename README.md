@@ -5,7 +5,11 @@ enough RAM. Blender renders separated passes headlessly and exits; After
 Effects then rebuilds the shot from a generated `.jsx`. The two applications
 never hold memory at the same time.
 
-Full design and rationale: [SPEC.md](SPEC.md).
+**New here? Start with [USAGE.md](USAGE.md)** — how to install it and get a shot
+from Blender into After Effects, start to finish.
+
+The rest of this file is engineering notes: what was built, and where reality
+turned out to differ from the spec. Full design and rationale: [SPEC.md](SPEC.md).
 
 ## Status
 

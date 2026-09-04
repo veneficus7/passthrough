@@ -5,6 +5,9 @@
 minversion = "8.0"
 testpaths = ["tests"]
 addopts = "-q --strict-markers --strict-config"
+markers = [
+    "integration: launches a real Blender in a subprocess (slow); deselect with -m 'not integration'",
+]
 # Makes `import passthrough` resolve to blender_addon/passthrough/ so the
 # pure-Python modules can be tested without launching Blender (SPEC.md §6).
 pythonpath = ["blender_addon"]

@@ -1,10 +1,29 @@
-"""Panels and properties.
+"""Panels and scene properties.
 
-Milestone 0 registers the container panel only. The operators, properties and
-add-on preferences arrive with later milestones (SPEC.md section 8).
+Milestone 1 adds the output location and the pass-setup button. Add-on
+preferences (AE project dir, pixels per unit, RAM budget) belong to prefs.py
+and arrive with a later milestone.
 """
 
 import bpy
+
+from . import pass_spec, passes
+
+
+class PassthroughSceneSettings(bpy.types.PropertyGroup):
+    """Per-scene Passthrough settings, reachable as ``scene.passthrough``."""
+
+    output_root: bpy.props.StringProperty(
+        name="Output Root",
+        description="Folder that shot subfolders are written into",
+        subtype="DIR_PATH",
+        default="//renders",
+    )
+    shot_name: bpy.props.StringProperty(
+        name="Shot Name",
+        description="Subfolder for this shot; each pass gets a folder inside it",
+        default="shot",
+    )
 
 
 class PASSTHROUGH_PT_main(bpy.types.Panel):
@@ -17,19 +36,57 @@ class PASSTHROUGH_PT_main(bpy.types.Panel):
     bl_context = "render"
 
     def draw(self, context):
+        layout = self.layout
+        settings = context.scene.passthrough
+
+        if not passes.is_eevee(context.scene.render.engine):
+            layout.label(text="Passthrough targets EEVEE", icon="ERROR")
+
+        col = layout.column()
+        col.use_property_split = True
+        col.prop(settings, "output_root")
+        col.prop(settings, "shot_name")
+
+        layout.operator(passes.PASSTHROUGH_OT_setup_passes.bl_idname, icon="NODETREE")
+
+
+class PASSTHROUGH_PT_passes(bpy.types.Panel):
+    """Shows where each pass will be written, so the paths are checkable."""
+
+    bl_idname = "PASSTHROUGH_PT_passes"
+    bl_label = "Passes"
+    bl_parent_id = "PASSTHROUGH_PT_main"
+    bl_space_type = "PROPERTIES"
+    bl_region_type = "WINDOW"
+    bl_context = "render"
+    bl_options = {"DEFAULT_CLOSED"}
+
+    def draw(self, context):
+        settings = context.scene.passthrough
+        shot = pass_spec.sanitize_shot_name(settings.shot_name)
         col = self.layout.column(align=True)
-        col.label(text="Skeleton installed (M0).", icon="CHECKMARK")
-        col.label(text="Pass setup arrives in M1.")
+        for spec in pass_spec.PASSES:
+            row = col.row()
+            row.label(text=spec.label)
+            row.label(text=f"{spec.key}/{pass_spec.frame_filename(spec.key, 1)}")
+        col.separator()
+        col.label(text=pass_spec.shot_dir(settings.output_root, shot), icon="FILE_FOLDER")
 
 
-_CLASSES = (PASSTHROUGH_PT_main,)
+_CLASSES = (
+    PassthroughSceneSettings,
+    PASSTHROUGH_PT_main,
+    PASSTHROUGH_PT_passes,
+)
 
 
 def register():
     for cls in _CLASSES:
         bpy.utils.register_class(cls)
+    bpy.types.Scene.passthrough = bpy.props.PointerProperty(type=PassthroughSceneSettings)
 
 
 def unregister():
+    del bpy.types.Scene.passthrough
     for cls in reversed(_CLASSES):
         bpy.utils.unregister_class(cls)

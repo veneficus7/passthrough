@@ -12,7 +12,7 @@ first, so any submodule that touches ``bpy`` is imported inside
 from importlib import import_module
 
 #: Submodules exposing ``register()`` / ``unregister()``, in registration order.
-_SUBMODULE_NAMES = ("ui",)
+_SUBMODULE_NAMES = ("passes", "ui")
 
 _registered = []
 

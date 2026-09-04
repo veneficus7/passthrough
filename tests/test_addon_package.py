@@ -17,8 +17,16 @@ def test_importing_the_package_does_not_pull_in_bpy():
 
 def test_bpy_touching_submodules_are_not_imported_at_package_scope():
     package = importlib.import_module("passthrough")
-    assert "passthrough.ui" not in sys.modules
-    assert not hasattr(package, "ui")
+    for name in ("ui", "passes"):
+        assert f"passthrough.{name}" not in sys.modules
+        assert not hasattr(package, name)
+
+
+def test_pure_modules_import_without_bpy():
+    """The section 6 payoff: these are testable in plain pytest."""
+    for name in ("pass_spec",):
+        importlib.import_module(f"passthrough.{name}")
+    assert "bpy" not in sys.modules
 
 
 def test_register_and_unregister_are_exposed():

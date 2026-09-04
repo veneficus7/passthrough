@@ -7,7 +7,7 @@ and arrive with a later milestone.
 
 import bpy
 
-from . import pass_spec, passes
+from . import pass_spec, passes, scene_capture
 
 
 class PassthroughSceneSettings(bpy.types.PropertyGroup):
@@ -47,7 +47,9 @@ class PASSTHROUGH_PT_main(bpy.types.Panel):
         col.prop(settings, "output_root")
         col.prop(settings, "shot_name")
 
-        layout.operator(passes.PASSTHROUGH_OT_setup_passes.bl_idname, icon="NODETREE")
+        col = layout.column(align=True)
+        col.operator(passes.PASSTHROUGH_OT_setup_passes.bl_idname, icon="NODETREE")
+        col.operator(scene_capture.PASSTHROUGH_OT_export_jsx.bl_idname, icon="TEXT")
 
 
 class PASSTHROUGH_PT_passes(bpy.types.Panel):

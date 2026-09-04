@@ -68,6 +68,8 @@ def rendered(tmp_path_factory):
         ],
         capture_output=True,
         text=True,
+        encoding="utf-8",
+        errors="replace",
         timeout=600,
     )
     if proc.returncode != 0 or "PT_DONE" not in proc.stdout:

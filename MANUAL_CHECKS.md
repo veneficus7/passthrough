@@ -13,10 +13,10 @@ Everything here assumes the repo root as the working directory.
 .venv/Scripts/python -m pytest
 ```
 
-Expect **70 passed**. That figure includes 9 integration tests that launch a
+Expect **143 passed**. That figure includes 20 integration tests that launch a
 real Blender; if Blender is not found they are skipped rather than failed, and
-you would see `61 passed, 9 skipped` instead — which means the integration half
-did **not** run.
+you would see `123 passed, 20 skipped` instead — which means the integration
+half did **not** run.
 
 To prove the integration tests really executed:
 
@@ -141,3 +141,46 @@ render:
 
 Channels must be `A B G R` with no dotted prefix, `HALF`, and `ZIP`
 compression. Cryptomatte is the exception: lowercase and `FLOAT`.
+
+---
+
+## 5. M2 — camera conversion and the .jsx
+
+### In Blender
+
+1. Set up a camera with some animation, then press **Export After Effects
+   Script** in the Passthrough panel.
+2. The header reports the path. The file lands at
+   `<output_root>/<shot_name>/<shot_name>.jsx`, beside the pass folders.
+
+### In After Effects
+
+1. *File ▸ Scripts ▸ Run Script File…*, choose the `.jsx`.
+2. It should run with **no error dialog**, and open a new comp.
+3. Check the comp settings against Blender:
+   - width × height match the render resolution
+   - frame rate matches
+   - duration is `(frame_end - frame_start + 1) / fps` seconds
+4. There is one camera layer, **Blender Camera**, with Position, Orientation
+   and Zoom keyframes.
+5. Scrub the timeline. The camera should sweep smoothly. **A sudden 358° spin
+   between two frames means orientation unwrapping has regressed.**
+6. Run the same script a second time. It must reuse the comp and replace the
+   camera rather than creating `orbit 2`.
+
+### The alignment check (SPEC.md §7.2's visual half)
+
+This is the one that catches everything, and only needs doing once.
+
+1. Import `beauty/beauty_0001.exr` into the comp and note where a recognisable
+   feature sits — a corner of the cube, say.
+2. Add a 3D null. Set its position to the After Effects position of that same
+   Blender world point: `x = bx*100 + width/2`, `y = -bz*100 + height/2`,
+   `z = by*100`.
+3. Looking through **Blender Camera**, the null must sit on top of that feature.
+
+The numeric half of this is automated in
+`tests/test_camera_integration.py::test_ae_camera_projects_points_where_blender_renders_them`,
+which agrees with Blender's own projection to under a tenth of a pixel across a
+full 360° orbit. The manual pass is confirming After Effects behaves the way
+that model assumes.

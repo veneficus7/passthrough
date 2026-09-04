@@ -9,9 +9,10 @@ Full design and rationale: [SPEC.md](SPEC.md).
 
 ## Status
 
-**M1 — Pass setup and File Output wiring.** One button configures the EEVEE
-passes and builds a compositor tree that writes one EXR sequence per pass, in
-the layout SPEC.md §7.3 specifies:
+**M2 — Camera conversion and `.jsx` generation.** Two buttons: one configures
+the EEVEE passes and builds a compositor tree that writes one EXR sequence per
+pass, the other writes an After Effects script that rebuilds the comp and
+camera. Passes land in the layout SPEC.md §7.3 specifies:
 
 ```
 <output_root>/<shot_name>/
@@ -22,8 +23,10 @@ the layout SPEC.md §7.3 specifies:
 └── crypto/     crypto_0001.exr ...
 ```
 
-Camera conversion, `.jsx` generation and headless rendering (M2–M7) are not
-built yet. Milestones are listed in SPEC.md §8.
+The `.jsx` is written to `<output_root>/<shot_name>/<shot_name>.jsx`. It
+currently builds the comp and the camera; importing the pass sequences,
+stacking them and parenting nulls is M4. Headless rendering (M3) and the rest
+are listed in SPEC.md §8.
 
 ## Layout
 
@@ -64,6 +67,11 @@ Two things verified against a real Blender install that differ from SPEC.md:
   `blender_manifest.toml` at the archive root, and creates the `passthrough/`
   directory at install time from the manifest `id`. Verified on 5.1.2: installs,
   enables, and registers. Do not hand-repack the zip into a folder.
+- **§6 runtime location.** The layout puts `pt_runtime.jsx` in `ae_scripts/`
+  at the repo root. Nothing outside `blender_addon/passthrough/` ends up in the
+  built zip, so the runtime would not ship. It lives at
+  `blender_addon/passthrough/ae_runtime/pt_runtime.jsx` instead, and a test
+  asserts the built zip contains it.
 - **§5 target version.** `blender_version_min` is `5.2.0` per the spec. On an
   older Blender the zip still *installs* — files are copied and the extension
   shows up in the add-on list — but it will not **enable**. The console reports
@@ -71,6 +79,35 @@ Two things verified against a real Blender install that differ from SPEC.md:
   (5.2.0)`, nothing registers, and no panel appears. The failure looks like a
   broken add-on rather than a version gate, so check the console first. The
   development machine currently has Blender 5.1.2.
+
+## Camera conversion notes
+
+SPEC.md §7.2 says to port Blender's `io_export_after_effects` rather than derive
+the maths. That add-on is **no longer bundled** with Blender (it moved to
+extensions.blender.org), so the reference was read from a source mirror. Porting
+it surfaced three things:
+
+- **The camera correction is −90° on X, not 180°.** §7.2 describes a "180 degree
+  reconciliation". The reference subtracts 90 from X, because an AE layer stands
+  upright while a Blender object lies in the XY plane.
+- **After Effects composes orientation as `Rx @ Ry @ Rz`.** Determined
+  empirically by projecting known points: of the six possible orders, only this
+  one reproduces Blender's projection, and it does so to ~1e-4 px. The others
+  are wrong by 519–1626 px.
+- **`sensor_fit='AUTO'` must fit the larger image dimension.** The reference
+  treats AUTO as horizontal. At this project's 1080×1920 target the sensor spans
+  the *height*, so zoom is `50 × 1920 / 36 = 2666.67`, not `1500`. Following the
+  reference would have given a 78% field-of-view error on every portrait shot.
+
+Two further things this implementation adds:
+
+- **Orientation tracks are unwrapped.** `atan2` wraps at ±180°, and After
+  Effects interpolates that literally — a camera would spin 358° between two
+  frames. Tracks are shifted by whole turns to stay continuous.
+- **`mathutils` is never imported.** `camera_convert.py` does its own matrix and
+  Euler arithmetic on plain tuples, because §6 requires it to be testable
+  without Blender. The port is checked element-wise against
+  `mathutils.Matrix.to_euler('ZYX')` in the integration tests.
 
 ## Blender 5.x compositor notes
 

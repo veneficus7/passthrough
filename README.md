@@ -9,10 +9,11 @@ Full design and rationale: [SPEC.md](SPEC.md).
 
 ## Status
 
-**M3 — Headless render and queue.** Four buttons: configure the EEVEE passes,
-write the After Effects script, and render the frame range in a *separate*
-background Blender — optionally quitting the UI as it launches, which is the
-whole point of the project. Passes land in the layout SPEC.md §7.3 specifies:
+**M4 — Full After Effects import.** Configure the EEVEE passes, render the
+frame range in a *separate* background Blender — optionally quitting the UI as
+it launches, which is the whole point of the project — then run one script in
+After Effects to get the whole shot back. Passes land in the layout SPEC.md
+§7.3 specifies:
 
 ```
 <output_root>/<shot_name>/
@@ -23,9 +24,10 @@ whole point of the project. Passes land in the layout SPEC.md §7.3 specifies:
 └── crypto/     crypto_0001.exr ...
 ```
 
-The `.jsx` is written to `<output_root>/<shot_name>/<shot_name>.jsx`. It
-currently builds the comp and the camera; importing the pass sequences,
-stacking them and parenting nulls is M4.
+The `.jsx` is written to `<output_root>/<shot_name>/<shot_name>.jsx`. Running it
+builds a comp matching the Blender scene, imports every pass as its own
+sequence, stacks them with beauty visible at the bottom and the rest as disabled
+guide layers, and adds the camera plus a null for every Blender empty.
 
 The headless render peaks at **484 MB** on the fixture scene, against the 6 GB
 budget M3 sets. Progress and cancellation are driven from `render.log` in the
@@ -112,6 +114,30 @@ Two further things this implementation adds:
   Euler arithmetic on plain tuples, because §6 requires it to be testable
   without Blender. The port is checked element-wise against
   `mathutils.Matrix.to_euler('ZYX')` in the integration tests.
+
+## After Effects import notes
+
+- **Everything is parented to one identity null, `PT World`.** The camera and
+  the nulls all carry *world-space* baked transforms, so mirroring Blender's
+  object hierarchy with AE parenting would apply each parent's transform twice.
+  A single null whose transform is the identity gives you one handle on the
+  whole 3D scene without disturbing anything. It is only the identity when
+  `position` equals `anchorPoint`, and `addNull()` sets neither to zero — both
+  are zeroed explicitly, and the camera's alignment depends on it.
+- **Nulls are created from Blender empties, and only empties.** One predictable
+  rule beats an option nobody asked for; to get a null on a mesh, parent an
+  empty to it.
+- **Imported sequences are conformed to the comp frame rate.** An image sequence
+  otherwise takes its rate from the user's AE import preferences, so a 24 fps
+  comp can silently end up holding 30 fps footage and every pass drifts out of
+  sync with the camera.
+- **Alpha is interpreted as premultiplied over black**, which is what Blender
+  writes. The generated script exposes this as `PT_ALPHA_PREMULTIPLIED` so it is
+  a one-word edit if a pass shows dark fringing.
+- **Lights are deliberately not exported.** AE lights only affect 3D layers that
+  accept them, and every pass here is a flat 2D footage layer, so they would be
+  inert — and mapping Blender's watts onto AE's intensity percentage is a guess.
+  §1 lists them; M4's acceptance criteria do not.
 
 ## Headless render notes
 

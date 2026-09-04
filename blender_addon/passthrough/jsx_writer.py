@@ -7,8 +7,12 @@ Everything emitted is ECMAScript 3 (section 7.1). In particular there is no
 ``JSON`` in ExtendScript, so data is written as literal ``var`` declarations
 rather than serialised and parsed on the AE side.
 
-Milestone 2 emits the comp and the camera. Importing the pass sequences,
-stacking them and parenting nulls is M4.
+Emits the comp, the camera, every pass sequence and a null per Blender empty.
+
+Lights are deliberately not exported. After Effects lights only affect 3D layers
+that accept them, and every pass here is a flat 2D footage layer, so they would
+be inert -- and mapping Blender's watts onto AE's intensity percentage is a
+guess. M4's acceptance criteria do not mention them.
 """
 
 import math
@@ -17,8 +21,9 @@ import os
 RUNTIME_FILENAME = "pt_runtime.jsx"
 RUNTIME_DIR = "ae_runtime"
 
-#: Layer name used for the camera, and the key for replacing it on re-run.
+#: Layer names, which double as the key for replacing a layer on re-run.
 CAMERA_LAYER_NAME = "Blender Camera"
+WORLD_NULL_NAME = "PT World"
 
 
 def runtime_path():
@@ -95,13 +100,17 @@ def _collapse(values):
     return [first]
 
 
-def write_jsx(comp, camera, runtime_source=None):
+def write_jsx(comp, camera, passes=None, nulls=None, runtime_source=None):
     """Return the complete ``.jsx`` source for one shot.
 
     ``comp`` needs ``name``, ``width``, ``height``, ``pixel_aspect``,
     ``frame_rate``, ``frame_start`` and ``frame_end``. ``camera`` needs
     ``name``, ``position``, ``orientation`` and ``zoom``, each a list with one
     entry per frame.
+
+    ``passes`` is a list of ``{"label", "path", "guide"}`` in bottom-of-stack
+    order, where ``path`` is the sequence's first frame. ``nulls`` is a list of
+    ``{"name", "position", "orientation"}``.
     """
     if runtime_source is None:
         runtime_source = load_runtime()
@@ -116,6 +125,8 @@ def write_jsx(comp, camera, runtime_source=None):
     positions = _collapse(camera["position"])
     orientations = _collapse(camera["orientation"])
     zooms = _collapse(camera["zoom"])
+    passes = list(passes or [])
+    nulls = list(nulls or [])
 
     for name, track in (("position", positions), ("orientation", orientations), ("zoom", zooms)):
         if len(track) not in (1, len(times)):
@@ -144,6 +155,19 @@ def write_jsx(comp, camera, runtime_source=None):
         f"var PT_CAM_POSITION = {js_vector_array(positions)};",
         f"var PT_CAM_ORIENTATION = {js_vector_array(orientations)};",
         f"var PT_CAM_ZOOM = {js_number_array(flat_zooms)};",
+        f"var PT_WORLD_NULL_NAME = {js_string(WORLD_NULL_NAME)};",
+        "",
+        "// Blender writes RGBA premultiplied over black. Set this to false if a",
+        "// pass shows dark fringing along its edges.",
+        "var PT_ALPHA_PREMULTIPLIED = true;",
+        "",
+        "// [layer name, first frame of the sequence, is a disabled guide layer].",
+        "// Bottom of the stack first, so beauty ends up underneath everything.",
+        f"var PT_PASSES = {_js_pass_table(passes)};",
+        "",
+        f"var PT_NULL_NAMES = {_js_string_array([entry['name'] for entry in nulls])};",
+        f"var PT_NULL_POSITION = {_js_track_table(nulls, 'position')};",
+        f"var PT_NULL_ORIENTATION = {_js_track_table(nulls, 'orientation')};",
         "",
         "// ---- build ----",
         "(function () {",
@@ -154,14 +178,52 @@ def write_jsx(comp, camera, runtime_source=None):
         "            PT_DURATION, PT_FRAME_RATE",
         "        );",
         "        comp.openInViewer();",
+        "",
+        "        var i;",
+        "        for (i = 0; i < PT_PASSES.length; i++) {",
+        "            ptAddPassLayer(",
+        "                comp, PT_PASSES[i][0], PT_PASSES[i][1], PT_PASSES[i][2],",
+        "                PT_FRAME_RATE, PT_ALPHA_PREMULTIPLIED",
+        "            );",
+        "        }",
+        "",
+        "        var world = ptEnsureWorldNull(comp, PT_WORLD_NULL_NAME, PT_DURATION);",
+        "        for (i = 0; i < PT_NULL_NAMES.length; i++) {",
+        "            ptAddNull(",
+        "                comp, PT_NULL_NAMES[i], PT_TIMES, PT_NULL_POSITION[i],",
+        "                PT_NULL_ORIENTATION[i], world, PT_DURATION",
+        "            );",
+        "        }",
+        "",
         "        ptAddCamera(",
         "            comp, PT_CAMERA_NAME, PT_TIMES,",
-        "            PT_CAM_POSITION, PT_CAM_ORIENTATION, PT_CAM_ZOOM",
+        "            PT_CAM_POSITION, PT_CAM_ORIENTATION, PT_CAM_ZOOM, world",
         "        );",
         "    } finally {",
         "        app.endUndoGroup();",
         "    }",
+        "    ptReportWarnings();",
         "})();",
         "",
     ]
     return "\n".join(lines)
+
+
+def _js_string_array(values):
+    return "[" + ", ".join(js_string(value) for value in values) + "]"
+
+
+def _js_pass_table(passes):
+    """``[[label, first frame path, is guide], ...]``, bottom of stack first."""
+    rows = []
+    for entry in passes:
+        guide = "true" if entry.get("guide") else "false"
+        rows.append(
+            "[" + ", ".join((js_string(entry["label"]), js_string(entry["path"]), guide)) + "]"
+        )
+    return "[" + ", ".join(rows) + "]"
+
+
+def _js_track_table(nulls, key):
+    """One collapsed animation track per null."""
+    return "[" + ", ".join(js_vector_array(_collapse(entry[key])) for entry in nulls) + "]"

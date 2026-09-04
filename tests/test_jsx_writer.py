@@ -254,3 +254,115 @@ def test_runtime_can_be_supplied_for_testing():
     out = jsx_writer.write_jsx(COMP, CAMERA, runtime_source="// stub runtime")
     assert "// stub runtime" in out
     assert "function ptEnsureComp(" not in out
+
+
+# --- M4: passes and nulls ----------------------------------------------------
+
+PASSES = [
+    {
+        "key": "beauty",
+        "label": "Beauty",
+        "path": "C:/out/hall/beauty/beauty_0001.exr",
+        "guide": False,
+    },
+    {
+        "key": "emission",
+        "label": "Emission",
+        "path": "C:/out/hall/emission/emission_0001.exr",
+        "guide": True,
+    },
+    {
+        "key": "crypto",
+        "label": "Cryptomatte Object",
+        "path": "C:/out/hall/crypto/crypto_0001.exr",
+        "guide": True,
+    },
+]
+
+NULLS = [
+    {
+        "name": "Empty",
+        "position": [(1.0, 2.0, 3.0), (4.0, 5.0, 6.0), (7.0, 8.0, 9.0)],
+        "orientation": [(0.0, 0.0, 0.0), (0.0, 0.0, 10.0), (0.0, 0.0, 20.0)],
+    },
+    {
+        "name": "Track.001",
+        "position": [(0.0, 0.0, 0.0)] * 3,
+        "orientation": [(0.0, 0.0, 0.0)] * 3,
+    },
+]
+
+
+@pytest.fixture
+def full_script():
+    return jsx_writer.write_jsx(COMP, CAMERA, passes=PASSES, nulls=NULLS)
+
+
+def test_full_script_is_es3_and_balanced(full_script):
+    assert_es3(full_script, "M4 .jsx")
+    assert_balanced(full_script, "M4 .jsx")
+
+
+def test_passes_are_emitted_bottom_of_stack_first(full_script):
+    """Beauty must be added first so everything else stacks above it."""
+    table = re.search(r"var PT_PASSES = \[(.*?)\];", full_script, re.S).group(1)
+    assert table.index('"Beauty"') < table.index('"Emission"') < table.index('"Cryptomatte Object"')
+
+
+def test_beauty_is_visible_and_the_rest_are_guides(full_script):
+    table = re.search(r"var PT_PASSES = \[(.*?)\];", full_script, re.S).group(1)
+    rows = re.findall(r"\[([^\]]*)\]", table)
+    assert rows[0].endswith("false"), "beauty must not be a guide layer"
+    assert all(row.endswith("true") for row in rows[1:]), "every other pass is a disabled guide"
+
+
+def test_pass_paths_are_emitted_as_escaped_strings(full_script):
+    assert '"C:/out/hall/beauty/beauty_0001.exr"' in full_script
+
+
+def test_windows_paths_with_backslashes_are_escaped():
+    windows = [dict(PASSES[0], path="C:" + chr(92) + "out" + chr(92) + "beauty_0001.exr")]
+    out = jsx_writer.write_jsx(COMP, CAMERA, passes=windows)
+    assert chr(92) * 2 in out
+    assert_balanced(out, "windows path .jsx")
+
+
+def test_null_names_and_tracks_are_emitted(full_script):
+    assert 'var PT_NULL_NAMES = ["Empty", "Track.001"];' in full_script
+    positions = re.search(r"var PT_NULL_POSITION = \[(.*?)\];", full_script, re.S).group(1)
+    assert positions.count("[[") >= 1
+
+
+def test_a_static_null_collapses_to_one_keyframe(full_script):
+    """The second null never moves, so it should not get three identical keys."""
+    positions = re.search(r"var PT_NULL_POSITION = \[(.*)\];", full_script, re.S).group(1)
+    tracks = re.findall(r"\[\[.*?\]\]", positions)
+    assert tracks[-1] == "[[0, 0, 0]]"
+
+
+def test_camera_and_nulls_are_parented_to_the_world_null(full_script):
+    """M4 acceptance: camera and nulls parented."""
+    assert "var world = ptEnsureWorldNull(" in full_script
+    assert "PT_CAM_ZOOM, world" in full_script
+    assert "PT_NULL_ORIENTATION[i], world" in full_script
+
+
+def test_the_world_null_is_built_as_an_identity_transform():
+    """Parenting to it must not move anything: position has to equal anchor."""
+    runtime = jsx_writer.load_runtime()
+    body = runtime.split("function ptEnsureWorldNull")[1].split("function ")[0]
+    assert '"Anchor Point").setValue([0, 0, 0])' in body
+    assert '"Position").setValue([0, 0, 0])' in body
+
+
+def test_footage_is_conformed_to_the_comp_frame_rate():
+    """An imported sequence otherwise takes the frame rate from AE preferences."""
+    assert "conformFrameRate" in jsx_writer.load_runtime()
+
+
+def test_script_without_passes_or_nulls_is_still_valid():
+    out = jsx_writer.write_jsx(COMP, CAMERA)
+    assert "var PT_PASSES = [];" in out
+    assert "var PT_NULL_NAMES = [];" in out
+    assert_es3(out, "camera-only .jsx")
+    assert_balanced(out, "camera-only .jsx")

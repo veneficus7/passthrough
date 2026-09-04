@@ -13,9 +13,9 @@ Everything here assumes the repo root as the working directory.
 .venv/Scripts/python -m pytest
 ```
 
-Expect **187 passed** (147 unit, 40 integration). The integration tests launch
+Expect **210 passed** (187 unit, 52 integration). The integration tests launch
 a real Blender; if Blender is not found they are skipped rather than failed, and
-you would see `147 passed, 40 skipped` instead — which means the integration
+you would see the integration ones skipped instead — which means the integration
 half did **not** run.
 
 To prove the integration tests really executed:
@@ -219,3 +219,39 @@ that, the project has failed at its one job (SPEC.md §9).
 Note that pressing **Render Headless** saves a *copy* of the scene into the shot
 folder rather than touching your own .blend, so unsaved edits are included and
 your file is left alone.
+
+---
+
+## 7. M4 — the full import
+
+This is the milestone whose acceptance criterion is "no manual fixing required",
+so the check is: run the script, and see whether you would have to touch
+anything.
+
+1. Render a shot, then press **Export After Effects Script**.
+2. In After Effects, *File ▸ Scripts ▸ Run Script File…* and pick the `.jsx`.
+3. No error dialog. If a warning dialog appears it lists exactly what was
+   missing — usually a pass folder that was never rendered.
+
+Then check the comp, top to bottom:
+
+4. **Blender Camera** at the top, then the nulls, then the passes.
+5. Layer order of the passes, top to bottom: Cryptomatte Object, Normal, Mist,
+   Emission, **Beauty at the bottom**.
+6. Beauty is enabled and visible. Every other pass has its eyeball **off** and
+   shows the guide-layer marker. Nothing has a blending mode set — the point is
+   to hand you the ingredients, not a look.
+7. Each pass layer's duration matches the comp, and its frame rate reads as the
+   comp's rate in *Interpret Footage* — not 30 fps.
+8. A null exists for every empty in the Blender scene, named the same.
+9. **The camera and every null are parented to `PT World`.**
+
+### The check that matters most
+
+`PT World` is supposed to be a transform that changes nothing. Verify it:
+
+10. Note where a feature sits in the viewport. Select `PT World`, move it, and
+    confirm the camera and nulls move with it. Undo.
+11. Confirm the shot still lines up exactly as it did in §5's alignment check.
+    If everything is offset by half the comp size, `PT World` is not the
+    identity — its Position and Anchor Point must both be `0,0,0`.

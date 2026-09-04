@@ -41,7 +41,39 @@ def matrix_rows(matrix):
     return tuple(tuple(matrix[row][col] for col in range(4)) for row in range(4))
 
 
-def capture_camera(context, pixels_per_unit=camera_convert.DEFAULT_PIXELS_PER_UNIT):
+def null_objects(scene):
+    """Objects that become After Effects nulls.
+
+    Empties only, and deliberately so: an empty is the thing a compositor
+    actually places as a track point, and one predictable rule beats an option
+    nobody asked for. To get a null on a mesh, parent an empty to it.
+    """
+    return [obj for obj in scene.objects if obj.type == "EMPTY"]
+
+
+def capture_passes(scene):
+    """Where every pass sequence will be, predicted rather than scanned.
+
+    Section 7.3 requires the paths be derivable without inspecting the disk, so
+    the .jsx can be written before the render has finished.
+    """
+    settings = scene.passthrough
+    root = bpy.path.abspath(settings.output_root)
+    shot = pass_spec.sanitize_shot_name(settings.shot_name)
+    return [
+        {
+            "key": spec.key,
+            "label": spec.label,
+            "path": pass_spec.frame_path(root, shot, spec.key, scene.frame_start),
+            # Beauty is the visible base layer; everything else is a disabled
+            # guide layer. No look is presumed (SPEC.md M4).
+            "guide": spec.key != "beauty",
+        }
+        for spec in pass_spec.PASSES
+    ]
+
+
+def capture_shot(context, pixels_per_unit=camera_convert.DEFAULT_PIXELS_PER_UNIT):
     """Sample the active camera across the frame range.
 
     The camera is read through the dependency graph, so constraints, drivers
@@ -58,12 +90,35 @@ def capture_camera(context, pixels_per_unit=camera_convert.DEFAULT_PIXELS_PER_UN
     positions = []
     orientations = []
     zooms = []
+    empties = null_objects(scene)
+    null_tracks = {obj.name: {"position": [], "orientation": []} for obj in empties}
 
     original_frame = scene.frame_current
     try:
         for frame in range(scene.frame_start, scene.frame_end + 1):
             scene.frame_set(frame)
-            evaluated = camera.evaluated_get(context.evaluated_depsgraph_get())
+            depsgraph = context.evaluated_depsgraph_get()
+
+            for obj in empties:
+                obj_rows = matrix_rows(obj.evaluated_get(depsgraph).matrix_world)
+                track = null_tracks[obj.name]
+                track["position"].append(
+                    camera_convert.convert_position(
+                        camera_convert.to_translation(obj_rows),
+                        width,
+                        height,
+                        pixels_per_unit,
+                        aspect,
+                    )
+                )
+                # No x_rot_correction here: that 90 degree twist reconciles
+                # things that point down an axis -- cameras and lights -- not
+                # plain objects.
+                track["orientation"].append(
+                    camera_convert.convert_orientation(camera_convert.to_euler_zyx(obj_rows))
+                )
+
+            evaluated = camera.evaluated_get(depsgraph)
             rows = matrix_rows(evaluated.matrix_world)
 
             positions.append(
@@ -108,6 +163,20 @@ def capture_camera(context, pixels_per_unit=camera_convert.DEFAULT_PIXELS_PER_UN
         "orientation": camera_convert.unwrap_track(orientations),
         "zoom": zooms,
     }
+    nulls = [
+        {
+            "name": obj.name,
+            "position": null_tracks[obj.name]["position"],
+            "orientation": camera_convert.unwrap_track(null_tracks[obj.name]["orientation"]),
+        }
+        for obj in empties
+    ]
+    return comp, camera_data, capture_passes(scene), nulls
+
+
+def capture_camera(context, pixels_per_unit=camera_convert.DEFAULT_PIXELS_PER_UNIT):
+    """Just the comp and the camera, for callers that do not want the rest."""
+    comp, camera_data, _passes, _nulls = capture_shot(context, pixels_per_unit)
     return comp, camera_data
 
 
@@ -134,7 +203,7 @@ class PASSTHROUGH_OT_export_jsx(bpy.types.Operator):
             return {"CANCELLED"}
 
         try:
-            comp, camera = capture_camera(context, prefs.pixels_per_unit(context))
+            comp, camera, passes, nulls = capture_shot(context, prefs.pixels_per_unit(context))
         except LookupError as exc:
             self.report({"ERROR"}, str(exc))
             return {"CANCELLED"}
@@ -142,9 +211,9 @@ class PASSTHROUGH_OT_export_jsx(bpy.types.Operator):
         path = jsx_output_path(scene)
         os.makedirs(os.path.dirname(path), exist_ok=True)
         with open(path, "w", encoding="utf-8", newline="\n") as handle:
-            handle.write(jsx_writer.write_jsx(comp, camera))
+            handle.write(jsx_writer.write_jsx(comp, camera, passes=passes, nulls=nulls))
 
-        self.report({"INFO"}, f"Wrote {path}")
+        self.report({"INFO"}, f"Wrote {path} ({len(passes)} passes, {len(nulls)} nulls)")
         return {"FINISHED"}
 
 

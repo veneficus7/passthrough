@@ -4,17 +4,18 @@ This is the boundary SPEC.md section 6 asks for: "Pass ``bpy`` data *in*; do not
 reach *out* for it." Everything that touches ``bpy`` lives here, and
 ``camera_convert`` and ``jsx_writer`` receive dicts, floats and tuples.
 
-Not in the section 6 file list. It exists because the export operator has to
-touch ``bpy`` somewhere, and the two modules that do the actual work are
-required to stay importable without it. M4 (nulls and lights) and M5 (the
-scene doctor's inputs) capture from here too.
+Not in the section 6 file list. It exists because the operators have to touch
+``bpy`` somewhere, and the modules that do the actual work -- ``jsx_writer``,
+``camera_convert``, ``queue`` -- are kept importable without it so they can be
+unit tested. M4 (nulls and lights) and M5 (the scene doctor's inputs) capture
+from here too.
 """
 
 import os
 
 import bpy
 
-from . import camera_convert, jsx_writer, pass_spec, prefs
+from . import camera_convert, jsx_writer, pass_spec, prefs, queue
 
 
 def render_dimensions(scene):
@@ -147,7 +148,161 @@ class PASSTHROUGH_OT_export_jsx(bpy.types.Operator):
         return {"FINISHED"}
 
 
-_CLASSES = (PASSTHROUGH_OT_export_jsx,)
+RENDER_SCRIPT = "render_job.py"
+LOG_FILENAME = "render.log"
+
+#: The running job, so the panel can show state and the modal operator can be
+#: found again after a UI redraw.
+_active_job = None
+
+
+def active_job():
+    return _active_job
+
+
+def render_script_path():
+    return os.path.join(os.path.dirname(os.path.abspath(__file__)), RENDER_SCRIPT)
+
+
+def snapshot_blend(scene):
+    """Save a copy of the current scene beside the shot output.
+
+    A copy rather than the user's own file: it captures unsaved edits, works for
+    a scene that has never been saved, leaves the original untouched, and makes
+    the render reproducible later.
+    """
+    directory = shot_directory(scene)
+    os.makedirs(directory, exist_ok=True)
+    shot = pass_spec.sanitize_shot_name(scene.passthrough.shot_name)
+    path = os.path.join(directory, shot + ".blend")
+    bpy.ops.wm.save_as_mainfile(filepath=path, copy=True)
+    return path
+
+
+def shot_directory(scene):
+    settings = scene.passthrough
+    shot = pass_spec.sanitize_shot_name(settings.shot_name)
+    return pass_spec.shot_dir(bpy.path.abspath(settings.output_root), shot)
+
+
+class PASSTHROUGH_OT_render_headless(bpy.types.Operator):
+    """Render the shot in a background Blender, with this UI free to close."""
+
+    bl_idname = "passthrough.render_headless"
+    bl_label = "Render Headless"
+    bl_description = (
+        "Render the frame range in a separate background Blender. The UI can be "
+        "closed while it runs, which is what keeps memory available for After Effects"
+    )
+    bl_options = {"REGISTER"}
+
+    close_ui: bpy.props.BoolProperty(
+        name="Quit Blender After Launching",
+        description=(
+            "Launch the render detached and quit Blender immediately. Saves roughly "
+            "1-2 GB of RAM; progress then goes only to render.log"
+        ),
+        default=False,
+    )
+
+    _timer = None
+    _job = None
+
+    def _prepare(self, context):
+        scene = context.scene
+        if not scene.passthrough.output_root:
+            self.report({"ERROR"}, "Set an output root first")
+            return None
+        shot = pass_spec.sanitize_shot_name(scene.passthrough.shot_name)
+        blend = snapshot_blend(scene)
+        command = queue.build_command(
+            bpy.app.binary_path,
+            blend,
+            render_script_path(),
+            shot,
+            bpy.path.abspath(scene.passthrough.output_root),
+            scene.frame_start,
+            scene.frame_end,
+        )
+        return queue.RenderJob(
+            command,
+            os.path.join(shot_directory(scene), LOG_FILENAME),
+            detached=self.close_ui,
+        )
+
+    def execute(self, context):
+        global _active_job
+        job = self._prepare(context)
+        if job is None:
+            return {"CANCELLED"}
+        job.start()
+        _active_job = job
+        self.report({"INFO"}, f"Rendering detached; log at {job.log_path}")
+        bpy.ops.wm.quit_blender()
+        return {"FINISHED"}
+
+    def invoke(self, context, event):
+        global _active_job
+        if self.close_ui:
+            return self.execute(context)
+
+        job = self._prepare(context)
+        if job is None:
+            return {"CANCELLED"}
+        job.start()
+        _active_job = job
+        self._job = job
+        self._timer = context.window_manager.event_timer_add(0.25, window=context.window)
+        context.window_manager.modal_handler_add(self)
+        self.report({"INFO"}, "Rendering; press Esc to cancel")
+        return {"RUNNING_MODAL"}
+
+    def modal(self, context, event):
+        if event.type == "ESC":
+            self._job.cancel()
+            self._finish(context)
+            self.report({"WARNING"}, "Render cancelled")
+            return {"CANCELLED"}
+
+        if event.type != "TIMER":
+            return {"PASS_THROUGH"}
+
+        self._job.poll()
+        if self._job.running:
+            context.workspace.status_text_set(self._status())
+            return {"RUNNING_MODAL"}
+
+        code = self._job.close()
+        self._finish(context)
+        if self._job.error:
+            self.report({"ERROR"}, self._job.error)
+            return {"CANCELLED"}
+        if code:
+            self.report({"ERROR"}, f"Blender exited {code}; see {self._job.log_path}")
+            return {"CANCELLED"}
+        self.report(
+            {"INFO"},
+            f"Rendered {self._job.frame or 0} frames, peak "
+            f"{queue.format_bytes(self._job.peak_memory_bytes)}",
+        )
+        return {"FINISHED"}
+
+    def _status(self):
+        fraction = self._job.progress_fraction
+        percent = "" if fraction is None else f" {fraction * 100:.0f}%"
+        return (
+            f"Passthrough:{percent} frame {self._job.frame or 0}/{self._job.total or '?'} "
+            f"peak {queue.format_bytes(self._job.peak_memory_bytes)}"
+        )
+
+    def _finish(self, context):
+        if self._timer is not None:
+            context.window_manager.event_timer_remove(self._timer)
+            self._timer = None
+        context.workspace.status_text_set(None)
+
+
+_CLASSES = (PASSTHROUGH_OT_export_jsx, PASSTHROUGH_OT_render_headless)
 
 
 def register():

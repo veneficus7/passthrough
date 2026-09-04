@@ -9,10 +9,10 @@ Full design and rationale: [SPEC.md](SPEC.md).
 
 ## Status
 
-**M2 — Camera conversion and `.jsx` generation.** Two buttons: one configures
-the EEVEE passes and builds a compositor tree that writes one EXR sequence per
-pass, the other writes an After Effects script that rebuilds the comp and
-camera. Passes land in the layout SPEC.md §7.3 specifies:
+**M3 — Headless render and queue.** Four buttons: configure the EEVEE passes,
+write the After Effects script, and render the frame range in a *separate*
+background Blender — optionally quitting the UI as it launches, which is the
+whole point of the project. Passes land in the layout SPEC.md §7.3 specifies:
 
 ```
 <output_root>/<shot_name>/
@@ -25,8 +25,12 @@ camera. Passes land in the layout SPEC.md §7.3 specifies:
 
 The `.jsx` is written to `<output_root>/<shot_name>/<shot_name>.jsx`. It
 currently builds the comp and the camera; importing the pass sequences,
-stacking them and parenting nulls is M4. Headless rendering (M3) and the rest
-are listed in SPEC.md §8.
+stacking them and parenting nulls is M4.
+
+The headless render peaks at **484 MB** on the fixture scene, against the 6 GB
+budget M3 sets. Progress and cancellation are driven from `render.log` in the
+shot folder, which outlives the Blender UI. Remaining milestones are in
+SPEC.md §8.
 
 ## Layout
 
@@ -108,6 +112,28 @@ Two further things this implementation adds:
   Euler arithmetic on plain tuples, because §6 requires it to be testable
   without Blender. The port is checked element-wise against
   `mathutils.Matrix.to_euler('ZYX')` in the integration tests.
+
+## Headless render notes
+
+- **Blender 5.1 does not emit the progress lines §7.6 describes.** There is no
+  `Fra:12 Mem:412.35M` anywhere in a background render's output — that is
+  older-Blender/Cycles formatting. What Blender 5.1 prints is
+  `00:02.125  render  | Saved: '<path>'`, one line per written image. So
+  `render_job.py` emits its own `PT_FRAME n/total` markers, and `queue.py`
+  parses all three forms.
+- **Frames are rendered one at a time with `write_still=False`,** not as an
+  animation. Blender still substitutes the `####` token in the File Output
+  nodes, but writes no main render output — so the shot folder contains exactly
+  the §7.3 tree and nothing else.
+- **The child's output goes to a log file, not a pipe.** A pipe has to be
+  drained by a reader thread or it fills and stalls the render, and it dies with
+  the parent. A log file is non-blocking to poll and survives Blender closing,
+  which is what M3 is for.
+- **`view_transform` reports only `NONE` in its enum in background mode** while
+  still accepting real values, so `render_job.py` assigns `Raw` rather than
+  validating against the enum first.
+- Peak memory is measured through `GetProcessMemoryInfo` via ctypes, so the
+  §9 memory regression check needs no third-party dependency.
 
 ## Blender 5.x compositor notes
 

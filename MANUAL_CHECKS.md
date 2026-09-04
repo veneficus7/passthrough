@@ -13,9 +13,9 @@ Everything here assumes the repo root as the working directory.
 .venv/Scripts/python -m pytest
 ```
 
-Expect **143 passed**. That figure includes 20 integration tests that launch a
-real Blender; if Blender is not found they are skipped rather than failed, and
-you would see `123 passed, 20 skipped` instead — which means the integration
+Expect **187 passed** (147 unit, 40 integration). The integration tests launch
+a real Blender; if Blender is not found they are skipped rather than failed, and
+you would see `147 passed, 40 skipped` instead — which means the integration
 half did **not** run.
 
 To prove the integration tests really executed:
@@ -184,3 +184,38 @@ The numeric half of this is automated in
 which agrees with Blender's own projection to under a tenth of a pixel across a
 full 360° orbit. The manual pass is confirming After Effects behaves the way
 that model assumes.
+
+---
+
+## 6. M3 — headless render
+
+### In Blender
+
+1. Set the frame range and press **Render Headless**.
+2. The status bar shows `Passthrough: n% frame x/y peak <memory>`. Blender's own
+   UI stays responsive — the render is a separate process.
+3. Press **Esc**. The render must stop, and the background `blender.exe` must
+   disappear from Task Manager. A leftover process is a failure.
+4. Press **Render Headless** again and let it finish. The report line gives the
+   frame count and peak memory.
+
+### The one that matters
+
+5. Press **Render and Quit Blender**. Blender should close immediately and the
+   render should keep going. Watch `blender.exe` in Task Manager: there should
+   be exactly one, and its memory is the number this whole project exists to
+   keep down.
+6. While it runs, open `<output_root>/<shot_name>/render.log`. It fills with
+   `PT_FRAME n/total` lines as frames complete.
+7. When it finishes the log ends with `PT_DONE frames=n`, and the shot folder
+   holds the §7.3 tree plus `render.log` and the `.blend` snapshot.
+
+### Memory
+
+The fixture scene peaks at about **484 MB**. On a real 1080×1920 shot, watch the
+peak in Task Manager and compare against the 6 GB budget. If it climbs above
+that, the project has failed at its one job (SPEC.md §9).
+
+Note that pressing **Render Headless** saves a *copy* of the scene into the shot
+folder rather than touching your own .blend, so unsaved edits are included and
+your file is left alone.

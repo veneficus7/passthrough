@@ -51,6 +51,19 @@ class PASSTHROUGH_PT_main(bpy.types.Panel):
         col.operator(passes.PASSTHROUGH_OT_setup_passes.bl_idname, icon="NODETREE")
         col.operator(scene_capture.PASSTHROUGH_OT_export_jsx.bl_idname, icon="TEXT")
 
+        col = layout.column(align=True)
+        col.operator(
+            scene_capture.PASSTHROUGH_OT_render_headless.bl_idname,
+            text="Render Headless",
+            icon="RENDER_ANIMATION",
+        ).close_ui = False
+        col.operator(
+            scene_capture.PASSTHROUGH_OT_render_headless.bl_idname,
+            text="Render and Quit Blender",
+            icon="QUIT",
+        ).close_ui = True
+        col.label(text=f"Frames {context.scene.frame_start}-{context.scene.frame_end}")
+
 
 class PASSTHROUGH_PT_passes(bpy.types.Panel):
     """Shows where each pass will be written, so the paths are checkable."""

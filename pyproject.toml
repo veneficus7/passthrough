@@ -1,0 +1,17 @@
+# Tooling configuration only — Passthrough is a Blender extension, not a
+# distributable Python package, so there is deliberately no [project] table.
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+addopts = "-q --strict-markers --strict-config"
+# Makes `import passthrough` resolve to blender_addon/passthrough/ so the
+# pure-Python modules can be tested without launching Blender (SPEC.md §6).
+pythonpath = ["blender_addon"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM"]

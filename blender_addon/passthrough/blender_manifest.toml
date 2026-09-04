@@ -1,0 +1,10 @@
+schema_version = "1.0.0"
+id = "passthrough"
+name = "Passthrough"
+tagline = "Render Blender passes straight into an After Effects comp"
+version = "0.1.0"
+type = "add-on"
+maintainer = "Bakhodir <321123292+veneficus7@users.noreply.github.com>"
+license = ["SPDX:GPL-3.0-or-later"]
+blender_version_min = "5.2.0"
+tags = ["Render", "Pipeline"]

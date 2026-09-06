@@ -61,9 +61,8 @@ not reversible once the listing is live and indexed.
 - [ ] Maintainer email in the manifest (see above)
 - [ ] Repository visibility — public repositories make review easier and let
       users file issues, but see above
-- [ ] Version number. It is `0.1.0`. Nothing about the Blender side is
-      provisional, but **the After Effects half has never been run in After
-      Effects** — see the caveat below
+- [ ] Version number. It is `0.1.0`. Both halves now work end to end on a real
+      shot; whether that is a `0.1.0` or a `1.0.0` is a judgement call
 
 ### Needs doing at submission time
 
@@ -76,23 +75,32 @@ not reversible once the listing is live and indexed.
 
 ---
 
-## The thing to weigh before publishing at all
+## Verified in After Effects
 
-Every Blender-side claim in this project is tested: 369 automated tests, camera
-conversion verified against Blender's own projection to under a tenth of a pixel,
-memory estimates measured against real renders.
+Run in **After Effects 2025 on Windows**, against a 32-frame orbiting-camera
+shot at 1080 x 1920:
 
-**The After Effects half has never been run in After Effects.** The generated
-`.jsx` is checked for valid ECMAScript 3, balanced delimiters and correct
-structure, and the scripting behaviour is taken from Adobe's documentation — but
-nobody has clicked *Run Script File* on a real installation. `guideLayer`,
-`conformFrameRate`, `AlphaMode`, `addNull`'s anchor defaults, and the assumption
-that parenting to an identity null changes nothing are all inference.
+- the script runs with no errors and builds the comp
+- comp settings match the Blender scene: 1080 x 1920, 24 fps, correct duration
+- all five passes import, each conformed to **24 fps** rather than the import
+  preference default
+- layer order is right, with **Beauty visible at the bottom** and the other four
+  as **disabled guide layers**
+- every null lands on its predicted position to the pixel: `540, 960, 0` ·
+  `800, 850, 120` · `540, 860, 0`
+- **`PT World` reads `0, 0, 0`** -- the identity-parenting assumption holds, and
+  the camera and all nulls are parented to it
+- the camera orbits **smoothly and consistently** through a full 360 degrees,
+  with no spin at the wrap point
 
-Publishing an add-on whose entire second half is unverified is a choice, not an
-oversight. Run [MANUAL_CHECKS.md](MANUAL_CHECKS.md) §5 and §7 in real After
-Effects first. It is an hour, and it is the difference between "tested" and
-"believed to work".
+That covers the coordinate conversion, the zoom derivation, the orientation
+unwrapping, the layer treatment and the footage interpretation together.
+
+Not yet exercised: alpha fringing on a shot with real edge transparency, and
+running the same script twice in one session.
+
+The one known-bad layer is **Cryptomatte Object**, which renders black. That is
+expected and explained in the layer's own comment.
 
 ---
 

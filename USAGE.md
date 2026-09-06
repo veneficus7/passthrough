@@ -289,10 +289,13 @@ The Blender half of this is tested hard: 244 automated tests, including ones tha
 render real frames and check the files on disk. The camera conversion is verified
 against Blender's own projection maths to under a tenth of a pixel.
 
-The **After Effects half has never been run in After Effects.** The scripts are
-checked for valid ExtendScript and correct structure, and the AE scripting
-behaviour is taken from the documentation, but nobody has yet clicked *Run Script
-File* on a real installation. If something in step 6 does not behave as described
-above, it is a genuine bug and worth reporting rather than working around.
+The After Effects half **has now been run in After Effects 2025** on a real
+shot: the comp, the passes, the layer stack, the nulls and a full 360-degree
+camera orbit all came out as described above. What has not been exercised is
+alpha fringing on footage with real edge transparency, and running the same
+script twice in one session.
+
+If something does not behave as described, it is a genuine bug and worth
+reporting rather than working around.
 
 [MANUAL_CHECKS.md](MANUAL_CHECKS.md) has a checklist for verifying it yourself.

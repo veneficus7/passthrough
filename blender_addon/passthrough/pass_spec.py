@@ -56,14 +56,45 @@ class PassSpec:
     """EXR bit depth. Half float halves disk and memory, which is the whole
     point of this project, and is plenty for colour and normals."""
 
+    note: str = ""
+    """What the pass is for, written into the After Effects layer's Comment.
+
+    A disabled guide layer with no explanation is a puzzle. The cryptomatte one
+    in particular renders black in After Effects, which looks like a broken
+    export unless you already know why."""
+
 
 #: v1 pass set, in the order section 7.3 lists them. Ambient Occlusion and
 #: Vector are deliberately absent; the spec defers them.
 PASSES = (
-    PassSpec("beauty", "Image", "use_pass_combined", "Beauty"),
-    PassSpec("emission", "Emission", "use_pass_emit", "Emission"),
-    PassSpec("mist", "Mist", "use_pass_mist", "Mist"),
-    PassSpec("normal", "Normal", "use_pass_normal", "Normal"),
+    PassSpec(
+        "beauty",
+        "Image",
+        "use_pass_combined",
+        "Beauty",
+        note="The rendered image. This is your base layer.",
+    ),
+    PassSpec(
+        "emission",
+        "Emission",
+        "use_pass_emit",
+        "Emission",
+        note="Glowing surfaces only. Try Add mode over Beauty for bloom you control.",
+    ),
+    PassSpec(
+        "mist",
+        "Mist",
+        "use_pass_mist",
+        "Mist",
+        note="Distance from camera, white is far. Drives depth of field and haze.",
+    ),
+    PassSpec(
+        "normal",
+        "Normal",
+        "use_pass_normal",
+        "Normal",
+        note="Surface direction as RGB. Relighting and direction-based masks.",
+    ),
     # Cryptomatte stores object-id hashes as raw float bits. Rounding them to
     # half float destroys the ids, so this pass must stay 32-bit.
     PassSpec(
@@ -72,6 +103,11 @@ PASSES = (
         "use_pass_cryptomatte_object",
         "Cryptomatte Object",
         color_depth="32",
+        note=(
+            "Object ID mattes, not a picture. Renders BLACK in After Effects: "
+            "Blender writes lowercase r/g/b/a channels and AE reads uppercase. "
+            "Needs a Cryptomatte plugin to be useful. Leave this layer off."
+        ),
     ),
 )
 

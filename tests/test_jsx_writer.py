@@ -264,18 +264,21 @@ PASSES = [
         "label": "Beauty",
         "path": "C:/out/hall/beauty/beauty_0001.exr",
         "guide": False,
+        "note": "The rendered image.",
     },
     {
         "key": "emission",
         "label": "Emission",
         "path": "C:/out/hall/emission/emission_0001.exr",
         "guide": True,
+        "note": "Glowing surfaces only.",
     },
     {
         "key": "crypto",
         "label": "Cryptomatte Object",
         "path": "C:/out/hall/crypto/crypto_0001.exr",
         "guide": True,
+        "note": "Renders BLACK in After Effects without a Cryptomatte plugin.",
     },
 ]
 
@@ -303,6 +306,12 @@ def test_full_script_is_es3_and_balanced(full_script):
     assert_balanced(full_script, "M4 .jsx")
 
 
+def pass_rows(source):
+    """``(label, path, guide, note)`` for each emitted pass."""
+    table = re.search(r"var PT_PASSES = \[(.*?)\];", source, re.S).group(1)
+    return re.findall(r'\["([^"]*)", "([^"]*)", (true|false), "([^"]*)"\]', table)
+
+
 def test_passes_are_emitted_bottom_of_stack_first(full_script):
     """Beauty must be added first so everything else stacks above it."""
     table = re.search(r"var PT_PASSES = \[(.*?)\];", full_script, re.S).group(1)
@@ -310,10 +319,27 @@ def test_passes_are_emitted_bottom_of_stack_first(full_script):
 
 
 def test_beauty_is_visible_and_the_rest_are_guides(full_script):
-    table = re.search(r"var PT_PASSES = \[(.*?)\];", full_script, re.S).group(1)
-    rows = re.findall(r"\[([^\]]*)\]", table)
-    assert rows[0].endswith("false"), "beauty must not be a guide layer"
-    assert all(row.endswith("true") for row in rows[1:]), "every other pass is a disabled guide"
+    rows = pass_rows(full_script)
+    assert rows[0][2] == "false", "beauty must not be a guide layer"
+    assert all(row[2] == "true" for row in rows[1:]), "every other pass is a disabled guide"
+
+
+def test_every_pass_carries_an_explanation(full_script):
+    """A disabled guide layer with no explanation is a puzzle.
+
+    The cryptomatte one renders black in After Effects, which reads as a broken
+    export unless the layer says otherwise.
+    """
+    for label, _path, _guide, note in pass_rows(full_script):
+        assert note, f"{label} has no comment"
+    crypto = [row for row in pass_rows(full_script) if "Crypto" in row[0]][0]
+    assert "BLACK" in crypto[3]
+
+
+def test_the_runtime_writes_the_comment_onto_the_layer():
+    runtime = jsx_writer.load_runtime()
+    body = runtime.split("function ptAddPassLayer")[1].split("\n}")[0]
+    assert "layer.comment = note;" in body
 
 
 def test_pass_paths_are_emitted_as_escaped_strings(full_script):

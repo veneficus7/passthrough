@@ -203,13 +203,20 @@ tool's job. Turn one on and it becomes an ordinary footage layer.
 | **Emission** | Only the glowing surfaces | Set to Add above beauty for bloom you control |
 | **Mist** | Distance from camera, white = far | Drives depth of field, atmospheric haze, distance fades |
 | **Normal** | Surface direction as RGB | Relighting, fake specular, direction-based masks |
-| **Cryptomatte Object** | Per-object ID mattes | Isolating one object — see the caveat below |
+| **Cryptomatte Object** | Per-object ID mattes | Nothing, without a plugin — see below |
 
-**Cryptomatte will probably look wrong or black in After Effects.** AE has no
-native cryptomatte support, and Blender writes that pass with lowercase channel
-names that AE's EXR reader does not pick up. It is imported anyway so it is there
-if you have a plugin that can read it. For simple object isolation, a mist or
-normal-based mask is usually easier.
+**Cryptomatte renders black in After Effects, and that is expected.** It is not
+a picture — each pixel encodes *which object is there*, as float ID hashes. Two
+things stop AE showing it: AE has no native cryptomatte support, and Blender
+writes that pass with lowercase `r`/`g`/`b`/`a` channel names while AE's EXR
+reader looks for uppercase. Turning the layer on gives you a black frame.
+
+It is imported anyway, switched off, so it is there if you ever add a plugin
+that reads it. For simple object isolation a mist or normal-based mask is
+easier. **Leave the layer off.**
+
+Every pass layer carries this explanation in its **Comment** column in the
+timeline, so you do not have to come back here.
 
 ---
 

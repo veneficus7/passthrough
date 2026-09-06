@@ -60,7 +60,7 @@ def imported(tmp_path_factory):
 
 def pass_rows(source):
     table = re.search(r"var PT_PASSES = \[(.*?)\];", source, re.S).group(1)
-    return re.findall(r'\["([^"]*)", "([^"]*)", (true|false)\]', table)
+    return re.findall(r'\["([^"]*)", "([^"]*)", (true|false), "([^"]*)"\]', table)
 
 
 # --- the script itself -------------------------------------------------------
@@ -90,7 +90,7 @@ def test_every_pass_is_imported(imported):
 def test_pass_paths_exist_on_disk(imported):
     """The paths are predicted, never scanned -- so they had better be right."""
     _, source = imported
-    for label, path, _guide in pass_rows(source):
+    for label, path, _guide, _note in pass_rows(source):
         assert Path(path).is_file(), f"{label} points at a file that does not exist: {path}"
 
 

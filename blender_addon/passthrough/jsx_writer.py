@@ -161,7 +161,7 @@ def write_jsx(comp, camera, passes=None, nulls=None, runtime_source=None):
         "// pass shows dark fringing along its edges.",
         "var PT_ALPHA_PREMULTIPLIED = true;",
         "",
-        "// [layer name, first frame of the sequence, is a disabled guide layer].",
+        "// [layer name, first frame, is a disabled guide layer, comment].",
         "// Bottom of the stack first, so beauty ends up underneath everything.",
         f"var PT_PASSES = {_js_pass_table(passes)};",
         "",
@@ -183,7 +183,7 @@ def write_jsx(comp, camera, passes=None, nulls=None, runtime_source=None):
         "        for (i = 0; i < PT_PASSES.length; i++) {",
         "            ptAddPassLayer(",
         "                comp, PT_PASSES[i][0], PT_PASSES[i][1], PT_PASSES[i][2],",
-        "                PT_FRAME_RATE, PT_ALPHA_PREMULTIPLIED",
+        "                PT_FRAME_RATE, PT_ALPHA_PREMULTIPLIED, PT_PASSES[i][3]",
         "            );",
         "        }",
         "",
@@ -214,12 +214,21 @@ def _js_string_array(values):
 
 
 def _js_pass_table(passes):
-    """``[[label, first frame path, is guide], ...]``, bottom of stack first."""
+    """``[[label, first frame path, is guide, note], ...]``, bottom of stack first."""
     rows = []
     for entry in passes:
         guide = "true" if entry.get("guide") else "false"
         rows.append(
-            "[" + ", ".join((js_string(entry["label"]), js_string(entry["path"]), guide)) + "]"
+            "["
+            + ", ".join(
+                (
+                    js_string(entry["label"]),
+                    js_string(entry["path"]),
+                    guide,
+                    js_string(entry.get("note", "")),
+                )
+            )
+            + "]"
         )
     return "[" + ", ".join(rows) + "]"
 

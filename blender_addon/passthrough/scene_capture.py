@@ -69,6 +69,7 @@ def capture_passes(scene):
             # Beauty is the visible base layer; everything else is a disabled
             # guide layer. No look is presumed (SPEC.md M4).
             "guide": spec.key != "beauty",
+            "note": spec.note,
         }
         for spec in pass_spec.PASSES
     ]

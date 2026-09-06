@@ -135,7 +135,7 @@ function ptImportSequence(path, frameRate, alphaPremultiplied) {
  * layer: the ingredients, arranged and labelled, with no look presumed
  * (SPEC.md M4).
  */
-function ptAddPassLayer(comp, name, path, isGuide, frameRate, alphaPremultiplied) {
+function ptAddPassLayer(comp, name, path, isGuide, frameRate, alphaPremultiplied, note) {
     ptRemoveLayer(comp, name);
     var item = ptImportSequence(path, frameRate, alphaPremultiplied);
     if (item === null) {
@@ -144,6 +144,11 @@ function ptAddPassLayer(comp, name, path, isGuide, frameRate, alphaPremultiplied
     var layer = comp.layers.add(item);
     layer.name = name;
     layer.startTime = 0;
+    if (note) {
+        // Shows in the timeline's Comment column. A disabled guide layer with
+        // no explanation is a puzzle, and the cryptomatte one renders black.
+        layer.comment = note;
+    }
     if (isGuide) {
         layer.guideLayer = true;
         layer.enabled = false;

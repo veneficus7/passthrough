@@ -13,8 +13,9 @@ Everything here assumes the repo root as the working directory.
 .venv/Scripts/python -m pytest
 ```
 
-Expect **360 passed, 1 skipped** (232 unit, 129 integration). The integration
-tests launch a real Blender; if Blender is not found they are skipped rather than failed, and
+Expect **369 passed, 1 skipped** (232 unit, 138 integration). The integration
+tests launch a real Blender; if Blender is not found they are skipped rather than
+failed, and
 you would see the integration ones skipped instead — which means the integration
 half did **not** run.
 
@@ -50,11 +51,18 @@ build the relaxed dev zip below for GUI testing.
 ### Build the zips
 
 ```bash
-blender --command extension build --source-dir blender_addon/passthrough --output-dir dist
+python tools/build_extension.py
 ```
 
-For a dev zip that installs on Blender 5.1, copy the add-on to a scratch folder,
-change `blender_version_min` to `5.1.0`, and build that copy instead.
+For a zip that installs on a Blender older than the manifest allows:
+
+```bash
+python tools/build_extension.py --dev-version 5.1.0
+```
+
+That writes a separate, suffixed zip and never edits the shipped manifest. Both
+are verified after building — the Blender build command only checks the manifest,
+so a missing data file is otherwise silent.
 
 ---
 
@@ -309,3 +317,30 @@ compositor, or the node graph at any point.
 
 If any template renders a flat, featureless frame, that is the failure this
 milestone's tests were extended to catch — say so rather than working around it.
+
+---
+
+## 10. M7 — the package
+
+Most of this milestone is checked automatically by
+`tests/test_install_integration.py`, which installs the built zip into a
+throwaway Blender configuration and drives the whole workflow with the source
+unreachable. What is left is worth ten minutes on a real machine:
+
+1. Build the release zip:
+
+```bash
+python tools/build_extension.py
+```
+
+2. Copy **only that zip** to a machine — or a user account — that has never seen
+   this repository.
+3. Install it from *Preferences ▸ Add-ons ▸ Install from Disk*.
+4. Build a template, set up passes, render, export. Nothing should ask for a file
+   that is not in the zip.
+5. Confirm the Passthrough preferences show **Pixels per Blender Unit** and
+   **Memory Budget**.
+
+Before submitting anywhere, read [PUBLISHING.md](PUBLISHING.md) — publishing the
+extension publishes the source and the maintainer email, which interacts with the
+decision to keep the repository private.

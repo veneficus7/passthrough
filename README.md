@@ -5,6 +5,11 @@ enough RAM. Blender renders separated passes headlessly and exits; After
 Effects then rebuilds the shot from a generated `.jsx`. The two applications
 never hold memory at the same time.
 
+<p align="center">
+  <img src="docs/corridor.gif" alt="Liminal corridor template rendering" width="200">
+  <img src="docs/camera_move.gif" alt="Camera move rig orbiting a subject" width="200">
+</p>
+
 **New here? Start with [USAGE.md](USAGE.md)** — how to install it and get a shot
 from Blender into After Effects, start to finish.
 
@@ -55,6 +60,35 @@ python -m venv .venv
 .venv\Scripts\python -m pip install pytest ruff
 .venv\Scripts\python -m pytest
 ```
+
+## Shot templates
+
+Five scenes, each built from a JSON schema with one button press and no node
+editing:
+
+![The five shot templates](docs/templates.png)
+
+Liminal corridor · volumetric light room · camera move rig · 3D text in space ·
+debris field.
+
+## Building the extension
+
+```bash
+python tools/build_extension.py
+```
+
+Produces `dist/passthrough-<version>.zip` and verifies it: the build command only
+validates the manifest, so the ExtendScript runtime and the template schemas —
+which are data, not code — can go missing without anything complaining until a
+user presses a button and gets nothing.
+
+To test on a Blender older than the manifest allows:
+
+```bash
+python tools/build_extension.py --dev-version 5.1.0
+```
+
+That writes a separate, suffixed zip and never touches the shipped manifest.
 
 ## Installing the add-on
 
@@ -119,6 +153,23 @@ Two further things this implementation adds:
   Euler arithmetic on plain tuples, because §6 requires it to be testable
   without Blender. The port is checked element-wise against
   `mathutils.Matrix.to_euler('ZYX')` in the integration tests.
+
+## Packaging notes
+
+- **`tools/build_extension.py` verifies what it built.** `blender --command
+  extension build` validates the manifest and nothing else, so a dropped data
+  file is silent. The tool checks every module, the runtime `.jsx` and all five
+  schemas are in the archive, and that the archive is flat rather than nested.
+- **The build tool used to overwrite its own output.** Blender names the zip
+  from the manifest, so a dev build written into the same directory silently
+  replaced the release zip — leaving a "release" archive that declared the dev
+  minimum version. Builds now go to a scratch directory and are moved into place
+  under distinct names.
+- **`tests/test_install_integration.py` is the only test that proves the
+  package.** Every other integration test puts `blender_addon` on `sys.path`,
+  which papers over anything the build forgot. That one installs the zip into a
+  throwaway Blender configuration and drives the whole workflow through
+  `bpy.ops` with the repository unreachable.
 
 ## Shot template notes
 

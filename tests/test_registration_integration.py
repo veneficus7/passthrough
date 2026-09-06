@@ -63,6 +63,7 @@ def test_every_milestone_operator_is_registered(report):
         "PASSTHROUGH_OT_render_headless",  # M3
         "PASSTHROUGH_OT_diagnose",  # M5
         "PASSTHROUGH_OT_auto_fix",  # M5
+        "PASSTHROUGH_OT_build_template",  # M6
     }
 
 
@@ -71,6 +72,7 @@ def test_every_panel_is_registered(report):
         "PASSTHROUGH_PT_main",
         "PASSTHROUGH_PT_passes",
         "PASSTHROUGH_PT_doctor",
+        "PASSTHROUGH_PT_templates",
     }
     assert set(report["panel_contexts"].values()) == {"render"}
 
@@ -82,7 +84,14 @@ def test_the_render_operator_exposes_close_ui(report):
 
 def test_scene_settings_are_attached(report):
     assert report["scene_property"]
-    assert {"output_root", "shot_name"} <= set(report["scene_property_fields"])
+    assert {"output_root", "shot_name", "template"} <= set(report["scene_property_fields"])
+
+
+def test_a_property_group_is_generated_for_every_template(report):
+    """M6 generates these from the JSON schemas at registration."""
+    fields = set(report["scene_property_all"])
+    for key in ("corridor", "light_room", "camera_move", "text_in_space", "debris_field"):
+        assert f"tpl_{key}" in fields, f"no property group for template {key}"
 
 
 def test_unregister_removes_everything(report):

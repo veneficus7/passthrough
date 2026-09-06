@@ -13,12 +13,12 @@ turned out to differ from the spec. Full design and rationale: [SPEC.md](SPEC.md
 
 ## Status
 
-**M5 — Scene doctor.** Check what a render will cost before committing to it,
-degrade the scene automatically if it will not fit, configure the EEVEE passes,
-render in a *separate* background Blender — optionally quitting the UI as it
-launches, which is the whole point of the project — then run one script in After
-Effects to get the whole shot back. Passes land in the layout SPEC.md §7.3
-specifies:
+**M6 — Shot templates.** Build a shot from one of five templates, check what it
+will cost before committing to it, degrade it automatically if it will not fit,
+configure the EEVEE passes, render in a *separate* background Blender —
+optionally quitting the UI as it launches, which is the whole point of the
+project — then run one script in After Effects to get the whole shot back.
+Passes land in the layout SPEC.md §7.3 specifies:
 
 ```
 <output_root>/<shot_name>/
@@ -119,6 +119,29 @@ Two further things this implementation adds:
   Euler arithmetic on plain tuples, because §6 requires it to be testable
   without Blender. The port is checked element-wise against
   `mathutils.Matrix.to_euler('ZYX')` in the integration tests.
+
+## Shot template notes
+
+Five templates — liminal corridor, volumetric light room, camera move rig, 3D
+text in space, debris field — each built procedurally from a JSON schema in
+`blender_addon/passthrough/templates/`.
+
+- **There are no `.blend` files.** §6's layout lists them; a checked-in `.blend`
+  cannot be reviewed in a diff, has to be rebuilt by hand for every change, and
+  is tied to the Blender version that wrote it. The schemas are the source of
+  truth: the panel's properties are *generated* from them at registration, so a
+  new parameter means editing one JSON file rather than three Python ones.
+- **Looking at the output caught what the tests did not.** Every template passed
+  its "is the frame black" checks while the light room was rendering a single
+  flat grey wall and the text camera was sitting inside a letter. The tests now
+  check the standard deviation of the beauty pass, which is what actually
+  separates a shot from a blank surface, and that the scene contains nothing
+  outside the template collection — the startup cube used to appear in all five.
+- **Camera distance for the text template is derived from the text's bounding
+  box,** so any wording frames correctly. Mist range follows it, because a fixed
+  range reads as solid white once the camera is far enough back.
+- **`use_volumetric_shadows` is what turns a spot in fog into a visible shaft.**
+  Without it the light room is just a glow.
 
 ## Scene doctor notes
 

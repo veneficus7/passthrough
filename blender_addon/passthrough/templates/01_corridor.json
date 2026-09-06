@@ -1,0 +1,17 @@
+{
+  "key": "corridor",
+  "name": "Liminal Corridor",
+  "description": "A long empty corridor receding into fog, lit by evenly spaced ceiling panels",
+  "parameters": [
+    {"key": "length", "label": "Length", "kind": "float", "default": 30.0, "min": 4.0, "max": 200.0, "subtype": "DISTANCE", "description": "How far the corridor runs into the distance"},
+    {"key": "width", "label": "Width", "kind": "float", "default": 3.0, "min": 1.0, "max": 20.0, "subtype": "DISTANCE"},
+    {"key": "height", "label": "Height", "kind": "float", "default": 3.0, "min": 1.5, "max": 20.0, "subtype": "DISTANCE"},
+    {"key": "light_spacing", "label": "Light Spacing", "kind": "float", "default": 4.0, "min": 1.0, "max": 40.0, "subtype": "DISTANCE", "description": "Gap between ceiling panels"},
+    {"key": "light_energy", "label": "Light Strength", "kind": "float", "default": 60.0, "min": 0.0, "max": 5000.0},
+    {"key": "light_color", "label": "Light Colour", "kind": "color", "default": [1.0, 0.92, 0.78]},
+    {"key": "wall_color", "label": "Wall Colour", "kind": "color", "default": [0.72, 0.7, 0.66]},
+    {"key": "fog_density", "label": "Fog Density", "kind": "float", "default": 0.03, "min": 0.0, "max": 0.5, "description": "Volumetric haze. Zero switches the fog off"},
+    {"key": "camera_drift", "label": "Camera Drift", "kind": "float", "default": 6.0, "min": 0.0, "max": 100.0, "subtype": "DISTANCE", "description": "How far the camera travels down the corridor"},
+    {"key": "frames", "label": "Frames", "kind": "int", "default": 96, "min": 1, "max": 2000}
+  ]
+}

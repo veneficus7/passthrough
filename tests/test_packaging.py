@@ -10,7 +10,7 @@ import zipfile
 from pathlib import Path
 
 import pytest
-from passthrough import jsx_writer
+from passthrough import jsx_writer, template_spec
 from test_passes_integration import ADDON_PARENT, BLENDER
 
 ADDON_DIR = ADDON_PARENT / "passthrough"
@@ -59,6 +59,19 @@ def test_built_zip_contains_every_module_and_the_runtime(tmp_path):
     )
     for module in ADDON_DIR.glob("*.py"):
         assert module.name in names, f"{module.name} did not make it into the zip"
+
+    # The template schemas are data, not code, so nothing else would notice
+    # their absence until a user pressed Build and got an empty list.
+    for schema in (ADDON_DIR / "templates").glob("*.json"):
+        assert f"templates/{schema.name}" in names, f"{schema.name} is missing from the zip"
+
+
+def test_every_template_schema_is_next_to_the_package():
+    """A plain-Python check that needs no Blender."""
+    directory = Path(template_spec.template_directory())
+    assert directory.is_dir()
+    assert len(list(directory.glob("*.json"))) == 5
+    assert ADDON_DIR.resolve() in directory.resolve().parents
 
 
 @pytest.mark.integration

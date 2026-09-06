@@ -13,8 +13,8 @@ Everything here assumes the repo root as the working directory.
 .venv/Scripts/python -m pytest
 ```
 
-Expect **244 passed, 1 skipped** (183 unit, 62 integration). The integration tests launch
-a real Blender; if Blender is not found they are skipped rather than failed, and
+Expect **360 passed, 1 skipped** (232 unit, 129 integration). The integration
+tests launch a real Blender; if Blender is not found they are skipped rather than failed, and
 you would see the integration ones skipped instead — which means the integration
 half did **not** run.
 
@@ -284,3 +284,28 @@ mesh. Resolution is just the percentage in Output Properties. Textures are
 scaled *and packed into the file*; to restore them, use *Image ▸ Unpack* and
 then reload the image. That last one is the only change that is not a one-click
 undo, which is why it is listed here.
+
+---
+
+## 9. M6 — shot templates
+
+The acceptance criterion is that someone who has never opened Blender can get a
+shot out. So do this check *as that person*: do not open the shader editor, the
+compositor, or the node graph at any point.
+
+1. Expand **Shot Templates**, pick **Liminal Corridor**, press **Build Scene**.
+2. Look through the camera (Numpad 0). You should see a corridor receding into
+   fog, lit by ceiling panels. **Not** a grey wall, and **no** default cube.
+3. Change **Length** to 60 and **Light Colour** to something blue. Press **Build
+   Scene** again. The scene changes and does not double up.
+4. Repeat for the other four. Each should look like its description:
+   - *Volumetric Light Room* — dark, with hard light and shadows on the floor
+   - *Camera Move Rig* — a lit sphere with a glowing ball beside it
+   - *3D Text in Space* — readable text with visible extrusion
+   - *Debris Field* — scattered fragments, some glowing
+5. Press play. The camera or the subject should be moving.
+6. Now run the normal workflow on one of them: Check Scene, Set Up Passes,
+   Render and Quit Blender, Export After Effects Script.
+
+If any template renders a flat, featureless frame, that is the failure this
+milestone's tests were extended to catch — say so rather than working around it.

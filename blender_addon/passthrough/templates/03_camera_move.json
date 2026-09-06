@@ -1,0 +1,15 @@
+{
+  "key": "camera_move",
+  "name": "Camera Move Rig",
+  "description": "An orbit, dolly or push-in rig aimed at the centre of the scene",
+  "parameters": [
+    {"key": "move", "label": "Move", "kind": "enum", "default": "ORBIT",
+     "items": [["ORBIT", "Orbit", "Circle the subject"], ["DOLLY", "Dolly", "Track sideways past the subject"], ["PUSH_IN", "Push In", "Move straight towards the subject"]]},
+    {"key": "radius", "label": "Distance", "kind": "float", "default": 9.0, "min": 0.5, "max": 200.0, "subtype": "DISTANCE"},
+    {"key": "height", "label": "Height", "kind": "float", "default": 2.5, "min": -50.0, "max": 50.0, "subtype": "DISTANCE"},
+    {"key": "travel", "label": "Travel", "kind": "float", "default": 1.0, "min": -8.0, "max": 8.0, "description": "Orbit turns, or metres for a dolly or push-in"},
+    {"key": "lens", "label": "Focal Length", "kind": "float", "default": 50.0, "min": 8.0, "max": 300.0},
+    {"key": "build_subject", "label": "Build a Subject", "kind": "bool", "default": true, "description": "Add something for the camera to look at. Turn off to aim the rig at your own scene"},
+    {"key": "frames", "label": "Frames", "kind": "int", "default": 96, "min": 1, "max": 2000}
+  ]
+}

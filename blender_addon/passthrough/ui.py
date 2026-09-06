@@ -7,7 +7,15 @@ and arrive with a later milestone.
 
 import bpy
 
-from . import pass_spec, passes, prefs, scene_capture, scene_doctor
+from . import (
+    pass_spec,
+    passes,
+    prefs,
+    scene_capture,
+    scene_doctor,
+    template_build,
+    template_spec,
+)
 
 
 class PassthroughSceneSettings(bpy.types.PropertyGroup):
@@ -125,15 +133,70 @@ class PASSTHROUGH_PT_doctor(bpy.types.Panel):
             layout.label(text="Not checked yet")
 
 
+class PASSTHROUGH_PT_templates(bpy.types.Panel):
+    """Build a shot without touching Blender's node editors."""
+
+    bl_idname = "PASSTHROUGH_PT_templates"
+    bl_label = "Shot Templates"
+    bl_parent_id = "PASSTHROUGH_PT_main"
+    bl_space_type = "PROPERTIES"
+    bl_region_type = "WINDOW"
+    bl_context = "render"
+    bl_options = {"DEFAULT_CLOSED"}
+
+    def draw(self, context):
+        layout = self.layout
+        settings = context.scene.passthrough
+
+        layout.prop(settings, "template", text="")
+
+        templates = template_spec.load_templates()
+        template = templates.get(settings.template)
+        if template is None:
+            layout.label(text="No template selected", icon="ERROR")
+            return
+
+        layout.label(text=template.description)
+
+        group = getattr(settings, template_build.group_name(template.key), None)
+        if group is not None:
+            column = layout.column()
+            column.use_property_split = True
+            for parameter in template.parameters:
+                column.prop(group, parameter.key)
+
+        layout.operator(template_build.PASSTHROUGH_OT_build_template.bl_idname, icon="SCENE_DATA")
+
+
 _CLASSES = (
     PassthroughSceneSettings,
     PASSTHROUGH_PT_main,
+    PASSTHROUGH_PT_templates,
     PASSTHROUGH_PT_passes,
     PASSTHROUGH_PT_doctor,
 )
 
 
+def attach_template_properties():
+    """Give the scene settings one property per template, from the schemas.
+
+    Done here rather than in the class body because the schemas are only read at
+    registration, and the generated PropertyGroups have to exist first. Called
+    before PassthroughSceneSettings is registered.
+    """
+    templates = template_spec.load_templates()
+    annotations = PassthroughSceneSettings.__annotations__
+    annotations["template"] = bpy.props.EnumProperty(
+        name="Template",
+        description="Shot template to build",
+        items=list(template_spec.enum_items(templates)),
+    )
+    for key, group in template_build.PROPERTY_GROUPS.items():
+        annotations[template_build.group_name(key)] = bpy.props.PointerProperty(type=group)
+
+
 def register():
+    attach_template_properties()
     for cls in _CLASSES:
         bpy.utils.register_class(cls)
     bpy.types.Scene.passthrough = bpy.props.PointerProperty(type=PassthroughSceneSettings)

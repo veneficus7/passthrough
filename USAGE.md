@@ -73,6 +73,30 @@ In *Edit ▸ Preferences ▸ Add-ons ▸ Passthrough*:
 
 Everything lives in **Render Properties ▸ Passthrough**.
 
+### 0. Start from a template (optional, but the fastest way in)
+
+Expand **Shot Templates**, pick one, and press **Build Scene**. You get a
+complete lit scene with a camera and a move already animated, at 1080×1920.
+
+| Template | What you get |
+|---|---|
+| **Liminal Corridor** | A long corridor receding into fog, ceiling panels overhead |
+| **Volumetric Light Room** | A dark room cut by hard beams through slits |
+| **Camera Move Rig** | An orbit, dolly or push-in aimed at a subject |
+| **3D Text in Space** | Extruded text floating in the dark, slowly turning |
+| **Debris Field** | Tumbling fragments, some of them glowing |
+
+Every parameter above the button is yours to change — length, colours, fog,
+frame count — then press **Build Scene** again. It replaces the previous build
+rather than stacking a second copy.
+
+**Build Scene deletes what is already in the scene** so the default cube does
+not end up in your shot. Untick **Replace Scene** in the operator panel
+(bottom-left after building) if you are adding a template to work you want to
+keep.
+
+If you have your own scene, skip this step entirely — nothing else depends on it.
+
 ### 1. Say where the render goes
 
 - **Output Root** — a folder you can find. `//renders` puts it next to your

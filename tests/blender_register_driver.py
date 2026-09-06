@@ -43,6 +43,11 @@ report = {
         for prop in bpy.context.scene.passthrough.bl_rna.properties
         if not prop.is_readonly
     ),
+    # A PointerProperty to a PropertyGroup reads as read-only in RNA, so the
+    # generated template groups are absent from the list above.
+    "scene_property_all": sorted(
+        prop.identifier for prop in bpy.context.scene.passthrough.bl_rna.properties
+    ),
     "render_script_exists": bool(scene_capture.render_script_path()),
     "panel_contexts": {
         name: getattr(bpy.types, name).bl_context for name in registered("PASSTHROUGH_PT")
